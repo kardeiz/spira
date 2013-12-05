@@ -401,7 +401,7 @@ module Spira
       repo = self.class.repository
       self.class.properties.each do |name, property|
         value = read_attribute name
-        if property[:serialize]
+        if property[:serialize] # self.class.reflect_on_association(name)
           # TODO: for now, always persist associations,
           #       as it's impossible to reliably determine
           #       whether the "association property" was changed
@@ -416,7 +416,9 @@ module Spira
         else
           if attribute_changed?(name.to_s)
             repo.delete [subject, property[:predicate], nil]
-            store_attribute(name, value, property[:predicate], repo)
+            Array.wrap(value).each do |val|
+              store_attribute(name, val, property[:predicate], repo)
+            end
           end
         end
       end
@@ -445,26 +447,25 @@ module Spira
     end
 
     # Directly retrieve an attribute value from the storage
-#    def retrieve_attribute(name, options, sts)
-#      refl = self.class.reflect_on_association(name)
-#      if refl && refl.macro == :has_many
-#        sts.inject([]) do |values, statement|
-#          if statement.predicate == options[:predicate]
-#            values << build_value(statement.object, options[:type])
-#          else values end
-#        end
-#      else
-#        sts.first ? build_value(sts.first.object, options[:type]) : nil
-#      end
-#    end
-    def retrieve_attribute(name, options, sts)
-      arr = sts.inject([]) do |values, statement|
-        if statement.predicate == options[:predicate]
-          values << build_value(statement.object, options[:type])
-        else values end
+    def retrieve_attribute(name, options, sts)      
+      if options[:serialize]
+        sts.inject([]) do |values, statement|
+          if statement.predicate == options[:predicate]
+            values << build_value(statement.object, options[:type])
+          else values end
+        end
+      else
+        sts.first ? build_value(sts.first.object, options[:type]) : nil
       end
-      return arr.first unless options[:serialize]
     end
+#    def retrieve_attribute(name, options, sts)
+#      arr = sts.inject([]) do |values, statement|
+#        if statement.predicate == options[:predicate]
+#          values << build_value(statement.object, options[:type])
+#        else values end
+#      end
+#      return arr.first unless options[:serialize]
+#    end
     # Destroy all model data
     # AND non-model data, where this resource is referred to as object.
     def destroy_model_data(*args)
