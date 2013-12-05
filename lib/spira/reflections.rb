@@ -15,5 +15,6 @@ module Spira
     def reflect_on_association(association)
       reflections[association].is_a?(AssociationReflection) ? reflections[association] : nil
     end
+    
   end
 end

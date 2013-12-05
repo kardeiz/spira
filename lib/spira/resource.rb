@@ -86,7 +86,7 @@ module Spira
         unset_has_many(name)
         predicate = predicate_for(opts[:predicate], name)
         type = type_for(opts[:type])
-        properties[name] = HashWithIndifferentAccess.new(:predicate => predicate, :type => type)
+        properties[name] = HashWithIndifferentAccess.new(:predicate => predicate, :type => type, :serialize => opts[:serialize])
 
         define_attribute_method name
         define_method "#{name}=" do |arg|
@@ -109,8 +109,14 @@ module Spira
     # ordering and duplicate values will be lost on save.
     #
     # @see Spira::Base::DSL#property
-    def has_many(name, opts = {})
+    
+    def has_one(name, opts = {})
       property(name, opts)
+      reflections[name] = AssociationReflection.new(:has_one, name, opts)
+    end
+    
+    def has_many(name, opts = {})
+      property(name, opts.merge!(:serialize => true))
 
       reflections[name] = AssociationReflection.new(:has_many, name, opts)
 

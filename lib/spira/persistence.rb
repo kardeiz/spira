@@ -24,12 +24,9 @@ module Spira
       # @return [Spira::Base, Array]
       def find(scope, *args)
         case scope
-        when :first
-          find_each(*args).first
-        when :all
-          find_all(*args)
-        else
-          instantiate_record(scope)
+        when :first then find_all(*args).first
+        when :all   then find_all(*args)
+        else instantiate_record(scope)
         end
       end
 
@@ -284,7 +281,7 @@ module Spira
       # FIXME: an object should be considered persisted
       # when its attributes (and their exact values) are all available in the storage.
       # This should check for !(changed? || new_record? || destroyed?) actually.
-      !(new_record? || destroyed?)
+      !(changed? || new_record? || destroyed?)
     end
 
     def save(*)
@@ -316,8 +313,8 @@ module Spira
       if block_given?
         self.class.properties.each do |name, property|
           if value = read_attribute(name)
-            if self.class.reflect_on_association(name)
-              value.each do |val|
+            if property[:serialize]
+              Array.wrap(value).each do |val|
                 node = build_rdf_value(val, property[:type])
                 yield RDF::Statement.new(subject, property[:predicate], node) if valid_object?(node)
               end
@@ -389,7 +386,7 @@ module Spira
         # "create" callback is triggered only when persisting a resource definition
         persistance_callback = new_record? && type ? :create : :update
         run_callbacks persistance_callback do
-          materizalize
+          materialize
           persist!
           reset_changes
         end
@@ -404,7 +401,7 @@ module Spira
       repo = self.class.repository
       self.class.properties.each do |name, property|
         value = read_attribute name
-        if self.class.reflect_on_association(name)
+        if property[:serialize]
           # TODO: for now, always persist associations,
           #       as it's impossible to reliably determine
           #       whether the "association property" was changed
@@ -413,7 +410,7 @@ module Spira
           #       into "true attributes" and associations
           #       and not mixing the both in @properties.
           repo.delete [subject, property[:predicate], nil]
-          value.each do |val|
+          Array.wrap(value).each do |val|
             store_attribute(name, val, property[:predicate], repo)
           end
         else
@@ -433,8 +430,8 @@ module Spira
     # "Materialize" the resource:
     # assign a persistable subject to a non-persisted resource,
     # so that it can be properly stored.
-    def materizalize
-      if new_record? && subject.anonymous? && type
+    def materialize
+      if new_record? && subject.anonymous? && ( type || !self.class.base_uri.nil?)
         # TODO: doesn't subject.anonymous? imply subject.id == nil ???
         @subject = self.class.id_for(subject.id)
       end
@@ -448,20 +445,26 @@ module Spira
     end
 
     # Directly retrieve an attribute value from the storage
+#    def retrieve_attribute(name, options, sts)
+#      refl = self.class.reflect_on_association(name)
+#      if refl && refl.macro == :has_many
+#        sts.inject([]) do |values, statement|
+#          if statement.predicate == options[:predicate]
+#            values << build_value(statement.object, options[:type])
+#          else values end
+#        end
+#      else
+#        sts.first ? build_value(sts.first.object, options[:type]) : nil
+#      end
+#    end
     def retrieve_attribute(name, options, sts)
-      if self.class.reflections[name]
-        sts.inject([]) do |values, statement|
-          if statement.predicate == options[:predicate]
-            values << build_value(statement.object, options[:type])
-          else
-            values
-          end
-        end
-      else
-        sts.first ? build_value(sts.first.object, options[:type]) : nil
+      arr = sts.inject([]) do |values, statement|
+        if statement.predicate == options[:predicate]
+          values << build_value(statement.object, options[:type])
+        else values end
       end
+      return arr.first unless options[:serialize]
     end
-
     # Destroy all model data
     # AND non-model data, where this resource is referred to as object.
     def destroy_model_data(*args)

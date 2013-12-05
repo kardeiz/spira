@@ -14,10 +14,11 @@ module Spira::Types
 
     def self.unserialize(value)
       object = value.object
+      object.to_date if object.respond_to?(:to_date)
     end
 
     def self.serialize(value)
-      RDF::Literal.new(value, :datatype => XSD.date)
+      RDF::Literal.new(value.to_s, :datatype => XSD.date)
     end
 
     register_alias XSD.date
